@@ -93,11 +93,38 @@ def predict(processor, model, file_list, output_dir, fps, connect_clients, item)
                 {
                     "role": "system",
                     # ----------------------------------------------------------------------------------
-                    "content": """根据用户的输入提示词,通过当前图片的背景来源,你需要仔细分析这张图片\
-                               并且以json格式输出,一张图片可能存在多个事件,请你按照指定格式输出.
-                               [{"event": // 事件名称
-                                "explain": //事件说明,给出详细理由
-                                "match": //符合程度,范围0~1.0,0代表不符合,0.5代表可能符合,1代表符合}]""",
+                    "content": """
+                    你需要判断画面中是否存在用户指定的事件，并提供具体的发生过程要素。
+                    必须基于画面中真实可见的主体、动作、涉及的物品或位置，严禁仅依据文字描述或示意图脑补推理。
+
+                    通用要求：
+                    1 画面中必须可见执行主体（如人、儿童、宠物、机器人、机械臂），并描述其外形或位置；
+                    2 必须有清晰可见的动作过程（如抓取、搬运、放置、投掷、攀爬、骑行等）；
+                    3 必须有具体的物品或目标位置（如垃圾桶、沙发、茶几、栏杆）；
+
+                    请输出 JSON 格式，每条事件必须包含：
+                    [{
+                     "event": 事件名称（与用户输入一致）
+                     "subject": 主体（如“机器人”）
+                     "action": 动作（如“抓取”“放置”“骑自行车”）
+                     "object": 被操作的物品或位置（如“衣物”“蓝色垃圾桶”“茶几”）
+                     "target_location": 若适用，动作的目标位置（如“放在蓝色垃圾桶”“放在沙发上”）；若为危险行为，可为空
+                     "explain": 用主谓宾+因果清楚描述整个过程（如“机器人抓取了一件衣物放在了黄色沙发上”）
+                     "match": 0~1.0（若缺少任何要素或无法在画面中看见，match = 0，并在 explain 中说明缺少什么）
+                    }]
+                    示例：
+                    [{
+                        "event": "整理家务",
+                        "subject": "机器人",
+                        "action": "抓取",
+                        "object": "衣物",
+                        "target_location": "黄色沙发",
+                        "explain": "机器人抓取了一件衣物放在了黄色沙发上",
+                        "match": 1.0
+                    }]
+
+                    若画面仅包含文字、流程框、示意图或结果，而未出现真实主体或动作过程，须输出 match = 0。
+                    """,
                 },
                 {
                     "role": "user",
@@ -107,10 +134,11 @@ def predict(processor, model, file_list, output_dir, fps, connect_clients, item)
                         {
                             "type": "text",
                             # -------------------------------------------------------------------------------------
-                            # 当前图片拍摄于家庭监控,你首先需要针对当前场景,分析是否发生了人身安全问题,简单扼要的指出,并且给出一个0~1的危险程度,"
-                            # "0完全没有危险,0.3是可能存在危险,0.5轻危险,0.8是比较危险,1重大危险;识别结果字数30字以内
-
-                            "text": f"背景来源:{item.background},请你仔细分析,是否存在{str(event)}"
+                            "text": f"背景来源:{item.background},\
+                            请严格判断是否真实存在用户指定的事件“{str(event)}”，\
+                            必须基于画面中可见的真实物体、人物或动作来判定，\
+                            不得仅依据文字、标签、流程示意图或抽象概念推断。\
+                            必须基于画面中真实可见的主体、动作过程、物品或位置，不得仅依据文字或示意图推断。"
                         }
                     ]
                 }
@@ -157,6 +185,8 @@ def predict(processor, model, file_list, output_dir, fps, connect_clients, item)
                     # 当前图片需要删除
                     need_deleted_pic.append(container_url)
             except Exception as e:
+                # 发消息前端
+                count += 1
                 print(f"当前大模型输出解析失败: {e}", f"  大模型输出:{result}")
                 continue
             current = round(int(pic_name.split(".")[0].split("_")[-1]) / fps)
@@ -171,6 +201,7 @@ def predict(processor, model, file_list, output_dir, fps, connect_clients, item)
                 "text": list_data,
                 "progress_bar": round(count / len(file_list), 3),
                 "pic_url": pic_url}, ensure_ascii=False)
+            print("count:",count,"all:",len(file_list))
             send_message(connect_clients, result)
 
             model_output.append(result)
