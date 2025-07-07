@@ -109,6 +109,7 @@ def predict(processor, model, file_list, output_dir, fps, connect_clients, item)
                      "action": 动作（如“抓取”“放置”“骑自行车”）
                      "object": 被操作的物品或位置（如“衣物”“蓝色垃圾桶”“茶几”）
                      "target_location": 若适用，动作的目标位置（如“放在蓝色垃圾桶”“放在沙发上”）；若为危险行为，可为空
+                     "risk": 若为危险事件，必须写明潜在风险（如“可能撞到茶几”）；若非危险行为可为空
                      "explain": 用主谓宾+因果清楚描述整个过程（如“机器人抓取了一件衣物放在了黄色沙发上”）
                      "match": 0~1.0（若缺少任何要素或无法在画面中看见，match = 0，并在 explain 中说明缺少什么）
                     }]
@@ -120,6 +121,16 @@ def predict(processor, model, file_list, output_dir, fps, connect_clients, item)
                         "object": "衣物",
                         "target_location": "黄色沙发",
                         "explain": "机器人抓取了一件衣物放在了黄色沙发上",
+                        "match": 1.0
+                    }]，
+                    [{
+                        "event": "小孩危险事件",
+                        "subject": "小孩",
+                        "action": "骑自行车",
+                        "object": "茶几",
+                        "target_location": "",
+                        "risk": "可能撞到茶几或沙发",
+                        "explain": "小孩在客厅骑自行车，可能撞到茶几或沙发",
                         "match": 1.0
                     }]
 
@@ -173,7 +184,7 @@ def predict(processor, model, file_list, output_dir, fps, connect_clients, item)
             container_url = os.path.dirname(os.path.abspath(__file__)) + "/" + output_dir + "/" + pic_name
 
             try:
-                list_data = [data for data in json.loads(s) if data["match"] >= 0.8]
+                list_data = [data for data in json.loads(s) if data["match"] >= 1.0]
 
                 for data in list_data:
                     match = data["match"]
